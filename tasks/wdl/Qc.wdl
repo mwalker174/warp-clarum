@@ -148,10 +148,15 @@ task CollectAggregationMetrics {
     File ref_fasta_index
     Boolean collect_gc_bias_metrics = true
     Int preemptible_tries
+    Int memory_multiplier = 1
   }
 
   Float ref_size = size(ref_fasta, "GiB") + size(ref_fasta_index, "GiB") + size(ref_dict, "GiB")
   Int disk_size = ceil(size(input_bam, "GiB") + ref_size) + 20
+
+  Int memory_size = ceil(8000 * memory_multiplier)
+  Int java_initial_size = memory_size - 2000
+  Int max_heap = memory_size - 1000
 
   command {
     # These are optionally generated, but need to exist for Cromwell's sake
@@ -161,7 +166,7 @@ task CollectAggregationMetrics {
       ~{output_bam_prefix}.insert_size_metrics \
       ~{output_bam_prefix}.insert_size_histogram.pdf
 
-    java -Xms5000m -Xmx6500m -jar /usr/picard/picard.jar \
+    java -Xms~{java_initial_size}m -Xmx~{max_heap}m -jar /usr/picard/picard.jar \
       CollectMultipleMetrics \
       INPUT=~{input_bam} \
       REFERENCE_SEQUENCE=~{ref_fasta} \
@@ -179,7 +184,7 @@ task CollectAggregationMetrics {
   }
   runtime {
     docker: "us.gcr.io/broad-gotc-prod/picard-cloud:2.26.10"
-    memory: "36000 MiB"
+    memory: "~{memory_size} MiB"
     disks: "local-disk " + disk_size + " HDD"
     preemptible: preemptible_tries
   }
