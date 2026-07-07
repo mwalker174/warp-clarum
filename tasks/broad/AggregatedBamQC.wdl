@@ -31,6 +31,7 @@ input {
     PapiSettings papi_settings
     File? fingerprint_genotypes_file
     File? fingerprint_genotypes_index
+    Int collect_aggregation_metrics_memory_multiplier = 1
   }
 
   # QC the final BAM (consolidated after scattered BQSR)
@@ -54,7 +55,8 @@ input {
       ref_dict = references.reference_fasta.ref_dict,
       ref_fasta = references.reference_fasta.ref_fasta,
       ref_fasta_index = references.reference_fasta.ref_fasta_index,
-      preemptible_tries = papi_settings.agg_preemptible_tries
+      preemptible_tries = papi_settings.agg_preemptible_tries,
+      memory_multiplier = collect_aggregation_metrics_memory_multiplier
   }
 
   if (defined(haplotype_database_file) && defined(fingerprint_genotypes_file)) {

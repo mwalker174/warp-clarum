@@ -1,3 +1,8 @@
+# 3.1.19
+2026-07-07 (Date of Last Commit)
+
+* Exposed top-level memory scaling inputs `mark_duplicates_memory_multiplier` and `collect_aggregation_metrics_memory_multiplier` to let callers raise memory for MarkDuplicates and CollectAggregationMetrics without setting deeply-nested task inputs. CollectAggregationMetrics memory and JVM heap now scale with the multiplier (previously hardcoded at 7 GB container / 6.5 GB heap). Defaults (multiplier = 1): MarkDuplicates unchanged; CollectAggregationMetrics now 8 GB container / 7 GB heap.
+
 # 3.1.18
 2023-12-18 (Date of Last Commit)
 

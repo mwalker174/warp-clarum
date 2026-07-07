@@ -44,7 +44,7 @@ import "../../../../../../structs/dna_seq/DNASeqStructs.wdl"
 # WORKFLOW DEFINITION
 workflow ExomeGermlineSingleSample {
 
-  String pipeline_version = "3.1.18"
+  String pipeline_version = "3.1.19"
 
 
   input {
@@ -62,6 +62,11 @@ workflow ExomeGermlineSingleSample {
 
     Boolean skip_reblocking = false
     Boolean provide_bam_output = false
+
+    # Memory scaling knobs for tasks that can OOM on large/high-coverage inputs.
+    # Multiply the task's default memory (and JVM heap); leave at 1 for default.
+    Int mark_duplicates_memory_multiplier = 1
+    Int collect_aggregation_metrics_memory_multiplier = 1
   }
 
   # Not overridable:
@@ -95,7 +100,8 @@ workflow ExomeGermlineSingleSample {
       cross_check_fingerprints_by = cross_check_fingerprints_by,
       haplotype_database_file = references.haplotype_database_file,
       lod_threshold = lod_threshold,
-      recalibrated_bam_basename = recalibrated_bam_basename
+      recalibrated_bam_basename = recalibrated_bam_basename,
+      mark_duplicates_memory_multiplier = mark_duplicates_memory_multiplier
   }
 
   call AggregatedQC.AggregatedBamQC {
@@ -109,7 +115,8 @@ workflow ExomeGermlineSingleSample {
       references = references,
       fingerprint_genotypes_file = fingerprint_genotypes_file,
       fingerprint_genotypes_index = fingerprint_genotypes_index,
-      papi_settings = papi_settings
+      papi_settings = papi_settings,
+      collect_aggregation_metrics_memory_multiplier = collect_aggregation_metrics_memory_multiplier
   }
 
   call ToCram.BamToCram as BamToCram {
