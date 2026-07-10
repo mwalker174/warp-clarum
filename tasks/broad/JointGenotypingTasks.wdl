@@ -125,7 +125,13 @@ task ImportGVCFs {
   >>>
 
   runtime {
-    memory: "~{machine_mem_mb} MiB"
+    # CLARUM cache-safe memory bump: hardcode the literal instead of raising the
+    # machine_mem_mb INPUT. Cromwell hashes every task input's value, so changing
+    # machine_mem_mb (even though it only feeds `memory`) would bust call-caching
+    # on ALL shards. `memory`/`cpu`/`disk` runtime attrs are NOT hashed, so this
+    # literal lets the already-completed shards cache-hit while the failed
+    # whole-chr9 shard re-runs at 64 GB (native consolidation OOM'd at 30 GB).
+    memory: "64000 MiB"
     cpu: 4
     bootDiskSizeGb: 15
     disks: "local-disk " + disk_size_gb + " HDD"
