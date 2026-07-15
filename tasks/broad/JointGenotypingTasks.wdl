@@ -162,11 +162,11 @@ task GenotypeGVCFs {
     String? additional_annotation
 
     Int disk_size_gb
-    # Bumped 26000 -> 52000: hyper-multiallelic loci (chr9 ~115-117Mb, up to 51 alleles)
-    # blow up GenomicsDB native/off-heap allocation. With -Xmx25000m ~= whole machine,
-    # RSS exceeded physical RAM -> kernel OOM-killed the VM (Batch VMReportingTimeout 50002).
-    # Keep -Xmx at 25000m; the extra RAM is headroom for native GenomicsDB, not heap.
-    Int machine_mem_mb = 52000
+    # DO NOT change this value: machine_mem_mb is a task input, so Cromwell includes it
+    # in the call-cache input hash. Changing it busts caching for every GenotypeGVCFs
+    # shard. The actual VM memory is set by a non-input literal in runtime{} below, which
+    # is NOT hashed, so we can raise RAM without invalidating cached shards.
+    Int machine_mem_mb = 26000
     # This is needed for gVCFs generated with GATK3 HaplotypeCaller
     Boolean allow_old_rms_mapping_quality_annotation_data = false
     String gatk_docker = "us.gcr.io/broad-gatk/gatk:4.6.1.0"
@@ -200,7 +200,16 @@ task GenotypeGVCFs {
   >>>
 
   runtime {
-    memory: "~{machine_mem_mb} MiB"
+    # CLARUM cache-safe memory bump: hardcode the literal instead of raising the
+    # machine_mem_mb INPUT. Cromwell hashes every task input's value, so changing
+    # machine_mem_mb (even though it only feeds `memory`) would bust call-caching
+    # on ALL shards. `memory`/`cpu`/`disk` runtime attrs are NOT hashed, so this
+    # literal lets the already-completed shards cache-hit while the failed shard-13
+    # re-runs at 52 GB. Hyper-multiallelic loci (chr9 ~115-117Mb, up to 51 alleles)
+    # blow up GenomicsDB native/off-heap allocation; with -Xmx25000m ~= whole 26000
+    # MiB machine, RSS exceeded physical RAM and the kernel OOM-killed the VM (Batch
+    # VMReportingTimeout 50002). -Xmx stays 25000m so the extra RAM is native headroom.
+    memory: "52000 MiB"
     cpu: 2
     bootDiskSizeGb: 15
     disks: "local-disk " + disk_size_gb + " HDD"
