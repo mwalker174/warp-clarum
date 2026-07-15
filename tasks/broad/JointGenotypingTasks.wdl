@@ -162,7 +162,11 @@ task GenotypeGVCFs {
     String? additional_annotation
 
     Int disk_size_gb
-    Int machine_mem_mb = 26000
+    # Bumped 26000 -> 52000: hyper-multiallelic loci (chr9 ~115-117Mb, up to 51 alleles)
+    # blow up GenomicsDB native/off-heap allocation. With -Xmx25000m ~= whole machine,
+    # RSS exceeded physical RAM -> kernel OOM-killed the VM (Batch VMReportingTimeout 50002).
+    # Keep -Xmx at 25000m; the extra RAM is headroom for native GenomicsDB, not heap.
+    Int machine_mem_mb = 52000
     # This is needed for gVCFs generated with GATK3 HaplotypeCaller
     Boolean allow_old_rms_mapping_quality_annotation_data = false
     String gatk_docker = "us.gcr.io/broad-gatk/gatk:4.6.1.0"
