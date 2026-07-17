@@ -28,9 +28,15 @@ workflow JointGenotyping {
     Int huge_disk
 
     Array[String]? snp_recalibration_tranche_values
-    Array[String] snp_recalibration_annotation_values
+    # Classic (site-level) VQSR annotations by default. Allele-specific (AS_*)
+    # annotations crash VariantRecalibrator (IndexOutOfBoundsException in
+    # VariantDataManager.decodeAnnotation) at spanning-deletion/multiallelic sites
+    # on GenotypeGVCFs output; site-level annotations are Number=1 scalars and
+    # avoid the per-allele indexing. Set use_allele_specific_annotations=true and
+    # override with AS_* lists only if the joint step produces AS-safe annotations.
+    Array[String] snp_recalibration_annotation_values = ["QD", "MQRankSum", "ReadPosRankSum", "FS", "MQ", "SOR", "DP"]
     Array[String]? indel_recalibration_tranche_values
-    Array[String]? indel_recalibration_annotation_values
+    Array[String]? indel_recalibration_annotation_values = ["FS", "ReadPosRankSum", "MQRankSum", "QD", "SOR", "DP"]
 
     File haplotype_database
 
@@ -63,7 +69,7 @@ workflow JointGenotyping {
     Float unbounded_scatter_count_scale_factor = 0.15
     Int gnarly_scatter_count = 10
     Boolean use_gnarly_genotyper = false
-    Boolean use_allele_specific_annotations = true # only applicabale to VQSR
+    Boolean use_allele_specific_annotations = false # AS VQSR crashes on GenotypeGVCFs multiallelic/spanning-deletion sites; default to classic site-level VQSR
     Boolean cross_check_fingerprints = true
     Boolean scatter_cross_check_fingerprints = false
     Boolean run_vets = false
