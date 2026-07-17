@@ -385,7 +385,7 @@ task IndelsVariantRecalibrator {
     cpu: "2"
     bootDiskSizeGb: 15
     disks: "local-disk " + disk_size_gb + " HDD"
-    preemptible: 1
+    preemptible: 0  # non-preemptible: deadline-critical, avoid spot preemption restarts
     docker: gatk_docker
   }
 
@@ -498,9 +498,16 @@ task SNPsVariantRecalibrator {
                               one_thousand_genomes_resource_vcf,
                               dbsnp_resource_vcf],
                       "MiB"))
-  Int machine_mem = select_first([machine_mem_mb, if auto_mem < 7000 then 7000 else auto_mem])
-  Int java_mem = machine_mem - 1000
-  Int max_heap = machine_mem - 500
+  # Whole-genome, non-scattered (Classic) SNP VQSR builds the Gaussian mixture
+  # over the full training set in one shot — memory scales with #training
+  # variants, not file size, so the auto_mem (2x input size) floor was far too
+  # low for a 620-sample WGS callset (OOM-killed, rc 247, during model fit).
+  # Floor at 104 GB (n1-highmem-16), matching SNPsVariantRecalibratorCreateModel.
+  # VQSR also uses significant off-heap native memory, so leave ~6-8 GB headroom
+  # between heap and VM (the old 500 MiB gap triggered the kernel OOM kill).
+  Int machine_mem = select_first([machine_mem_mb, if auto_mem < 104000 then 104000 else auto_mem])
+  Int java_mem = machine_mem - 8000
+  Int max_heap = machine_mem - 6000
 
 
   String model_report_arg = if defined(model_report) then "--input-model $MODEL_REPORT --output-tranches-for-scatter" else ""
@@ -533,7 +540,7 @@ task SNPsVariantRecalibrator {
     cpu: 2
     bootDiskSizeGb: 15
     disks: "local-disk " + disk_size_gb + " HDD"
-    preemptible: 1
+    preemptible: 0  # non-preemptible: deadline-critical, avoid spot preemption restarts
     docker: gatk_docker
   }
 
