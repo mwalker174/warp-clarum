@@ -937,12 +937,16 @@ task CrossCheckFingerprint {
     cp $gvcfInputsList gvcf_inputs.list
     cp $vcfInputsList vcf_inputs.list
 
+    # GenomicsDBImport accepts an optional third sample_name_map column (the gVCF index path, needed when
+    # the index is not at <gvcf>.tbi, e.g. TDR snapshots); Picard's INPUT_SAMPLE_FILE_MAP takes exactly two.
+    cut -f 1,2 ~{sample_name_map} > sample_name_map.2col.tsv
+
     gatk --java-options "-Xms~{java_mem}m -Xmx~{java_mem}m" \
       CrosscheckFingerprints \
       --INPUT gvcf_inputs.list \
       --SECOND_INPUT vcf_inputs.list \
       --HAPLOTYPE_MAP ~{haplotype_database} \
-      --INPUT_SAMPLE_FILE_MAP ~{sample_name_map} \
+      --INPUT_SAMPLE_FILE_MAP sample_name_map.2col.tsv \
       --CROSSCHECK_BY SAMPLE \
       --CROSSCHECK_MODE CHECK_SAME_SAMPLE \
       --NUM_THREADS ~{cpu} \
