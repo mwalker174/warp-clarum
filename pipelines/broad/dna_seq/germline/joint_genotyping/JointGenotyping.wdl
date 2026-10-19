@@ -72,6 +72,10 @@ workflow JointGenotyping {
     Boolean use_allele_specific_annotations = false # AS VQSR crashes on GenotypeGVCFs multiallelic/spanning-deletion sites; default to classic site-level VQSR
     Boolean cross_check_fingerprints = true
     Boolean scatter_cross_check_fingerprints = false
+    # Picard reads any input whose name is not .vcf/.vcf.gz/.bcf as a list of paths, so DRAGEN
+    # *.hard-filtered.gvcf.gz breaks CrosscheckFingerprints. When true, each gVCF is first cut to the
+    # haplotype-database sites under a .g.vcf.gz name (non-scattered path only).
+    Boolean subset_gvcfs_for_fingerprinting = false
     Boolean run_vets = false
   }
 
@@ -456,9 +460,28 @@ if (cross_check_fingerprints) {
       File gvcf_paths = line[1]
     }
 
+    if (subset_gvcfs_for_fingerprinting) {
+      scatter (idx in range(num_gvcfs)) {
+        Array[String] fp_line = sample_name_map_lines[idx]
+        String fp_sample_names = fp_line[0]
+
+        call Tasks.SubsetGvcfToFingerprintSites {
+          input:
+            gvcf = fp_line[1],
+            # third sample_name_map column, when present, is the gVCF index (TDR keeps it elsewhere)
+            gvcf_index = if length(fp_line) > 2 then fp_line[2] else fp_line[1] + ".tbi",
+            haplotype_database = haplotype_database,
+            output_name = idx + ".fingerprint_sites.g.vcf.gz"
+        }
+      }
+    }
+
+    Array[String] no_sample_names = []
+
     call Tasks.CrossCheckFingerprint as CrossCheckFingerprintSolo {
       input:
-        gvcf_paths = gvcf_paths,
+        gvcf_paths = select_first([SubsetGvcfToFingerprintSites.subset_gvcf, gvcf_paths]),
+        sample_names = select_first([fp_sample_names, no_sample_names]),
         vcf_paths = filtered_vcfs,
         sample_name_map = sample_name_map,
         haplotype_database = haplotype_database,

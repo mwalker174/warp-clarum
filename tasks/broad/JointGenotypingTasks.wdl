@@ -901,6 +901,9 @@ task CrossCheckFingerprint {
     Array[File] gvcf_paths
     Array[File] vcf_paths
     File sample_name_map
+    # When set, gvcf_paths are not the map's gVCFs (e.g. SubsetGvcfToFingerprintSites outputs); the Picard
+    # map is then built from sample_names and gvcf_paths, which must be in the same order.
+    Array[String] sample_names = []
     File haplotype_database
     String output_base_name
     Boolean scattered = false
@@ -939,7 +942,16 @@ task CrossCheckFingerprint {
 
     # GenomicsDBImport accepts an optional third sample_name_map column (the gVCF index path, needed when
     # the index is not at <gvcf>.tbi, e.g. TDR snapshots); Picard's INPUT_SAMPLE_FILE_MAP takes exactly two.
-    cut -f 1,2 ~{sample_name_map} > sample_name_map.2col.tsv
+    if [ ~{length(sample_names)} -gt 0 ]; then
+      sampleNamesList=~{write_lines(sample_names)}
+      if [ "$(wc -l < $sampleNamesList)" -ne "$(wc -l < gvcf_inputs.list)" ]; then
+        >&2 echo "ERROR: sample_names and gvcf_paths differ in length"
+        exit 1
+      fi
+      paste $sampleNamesList gvcf_inputs.list > sample_name_map.2col.tsv
+    else
+      cut -f 1,2 ~{sample_name_map} > sample_name_map.2col.tsv
+    fi
 
     gatk --java-options "-Xms~{java_mem}m -Xmx~{java_mem}m" \
       CrosscheckFingerprints \
@@ -989,6 +1001,51 @@ task CrossCheckFingerprint {
   }
 }
 
+
+task SubsetGvcfToFingerprintSites {
+
+  input {
+    File gvcf
+    File gvcf_index
+    File haplotype_database
+    String output_name
+    String gatk_docker = "us.gcr.io/broad-gatk/gatk:4.6.1.0"
+    Int machine_mem_mb = 3750
+    Int preemptible = 3
+  }
+
+  Int disk_size_gb = ceil(size(gvcf, "GiB") + size(gvcf_index, "GiB")) + 10
+
+  command <<<
+    set -euo pipefail
+
+    # Localized gVCF and index can sit in different directories (TDR) and the gVCF name may not end in
+    # .vcf.gz; give both one .g.vcf.gz name side by side so GATK finds the index and Picard sees a VCF.
+    ln -s "~{gvcf}" input.g.vcf.gz
+    ln -s "~{gvcf_index}" input.g.vcf.gz.tbi
+
+    awk -F'\t' -v OFS='\t' '$0 ~ /^[@#]/ {next} {print $1, $2 - 1, $2}' ~{haplotype_database} > fingerprint_sites.bed
+
+    gatk --java-options "-Xms2000m -Xmx3000m" \
+      SelectVariants \
+      -V input.g.vcf.gz \
+      -L fingerprint_sites.bed \
+      -O ~{output_name}
+  >>>
+
+  runtime {
+    memory: "~{machine_mem_mb} MiB"
+    cpu: 1
+    disks: "local-disk " + disk_size_gb + " HDD"
+    preemptible: preemptible
+    docker: gatk_docker
+  }
+
+  output {
+    File subset_gvcf = output_name
+    File subset_gvcf_index = output_name + ".tbi"
+  }
+}
 
 task GatherPicardMetrics {
 
